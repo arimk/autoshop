@@ -23,6 +23,10 @@ if (isset($_GET['logout'])) {
     <title>AutoShop - Image Editor</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
+        .hidden {
+            display: none !important;
+        }
+        
         body, html {
             height: 100%;
             overflow: hidden;
@@ -218,6 +222,10 @@ if (isset($_GET['logout'])) {
             container.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                // Only allow drag if it's primary or if secondary and no history
+                if (type === 'secondary' && (isPrimaryGenerated || history.length > 1)) {
+                    return;
+                }
                 container.classList.add('border-blue-500');
             });
 
@@ -231,6 +239,12 @@ if (isset($_GET['logout'])) {
                 e.preventDefault();
                 e.stopPropagation();
                 container.classList.remove('border-blue-500');
+                
+                // Prevent drop on secondary if there's any history
+                if (type === 'secondary' && (isPrimaryGenerated || history.length > 1)) {
+                    alert('Cannot add secondary image after generation. Please clear history to start over.');
+                    return;
+                }
                 
                 const files = e.dataTransfer.files;
                 if (files.length > 0) {
@@ -264,9 +278,16 @@ if (isset($_GET['logout'])) {
                     primaryRemoveImageBtn.classList.remove('hidden');
                     isPrimaryGenerated = false;
                     
-                    // Show secondary image container when primary image is added
-                    secondaryImageContainer.classList.remove('hidden');
+                    // Only show secondary container if this is the first upload and no generations yet
+                    if (history.length === 1 && !secondaryImage) {
+                        secondaryImageContainer.classList.remove('hidden');
+                    }
                 } else {
+                    // Only allow secondary image if primary is not generated and no history
+                    if (isPrimaryGenerated || history.length > 1) {
+                        alert('Cannot add secondary image after generation. Please clear history to start over.');
+                        return;
+                    }
                     secondaryImage = imageData;
                     secondaryPreviewImage.src = secondaryImage;
                     secondaryPreviewImage.classList.remove('hidden');
@@ -359,9 +380,6 @@ if (isset($_GET['logout'])) {
                 primaryUploadPrompt.classList.add('hidden');
                 primaryRemoveImageBtn.classList.remove('hidden');
                 isPrimaryGenerated = true;
-                
-                // Clear secondary image after generation
-                removeSecondaryImage();
 
                 // Add the response to history
                 history.push({
@@ -376,6 +394,10 @@ if (isset($_GET['logout'])) {
 
                 activeHistoryIndex = -1; // Reset active index for new generation
                 updateHistoryDisplay();
+
+                // Now that generation is successful, hide secondary container and clear secondary image
+                secondaryImageContainer.classList.add('hidden');
+                removeSecondaryImage();
 
                 // Clear the prompt
                 document.getElementById('prompt').value = '';
@@ -442,8 +464,8 @@ if (isset($_GET['logout'])) {
             primaryRemoveImageBtn.classList.remove('hidden');
             isPrimaryGenerated = true;
             
-            // Show secondary container but clear any secondary image
-            secondaryImageContainer.classList.remove('hidden');
+            // Hide secondary container and clear any secondary image for generated images
+            secondaryImageContainer.classList.add('hidden');
             removeSecondaryImage();
             
             // Update history display to highlight selected item
@@ -464,8 +486,8 @@ if (isset($_GET['logout'])) {
             primaryRemoveImageBtn.classList.add('hidden');
             isPrimaryGenerated = false;
             
-            // If secondary image exists, make it the primary
-            if (secondaryImage) {
+            // If secondary image exists and no history, make it the primary
+            if (secondaryImage && history.length === 1) {
                 primaryImage = secondaryImage;
                 primaryPreviewImage.src = secondaryImage;
                 primaryPreviewImage.classList.remove('hidden');
@@ -474,10 +496,9 @@ if (isset($_GET['logout'])) {
                 
                 // Clear secondary
                 removeSecondaryImage();
-            } else {
-                // Hide secondary container if no images
-                secondaryImageContainer.classList.add('hidden');
             }
+            // Never show secondary container if there has been any generation
+            secondaryImageContainer.classList.add('hidden');
         }
 
         function removeSecondaryImage() {
