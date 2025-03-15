@@ -79,6 +79,61 @@ if (isset($_GET['logout'])) {
             min-height: 0;
             overflow: auto;
         }
+
+        /* Loading overlay styles */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .loading-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            text-align: center;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 4rem;
+            height: 4rem;
+            margin-bottom: 1rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .loading-spinner-circle {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 4px solid #3B82F6;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-100 h-screen flex flex-col">
@@ -165,10 +220,12 @@ if (isset($_GET['logout'])) {
     </div>
 
     <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white p-8 rounded-xl shadow-2xl">
-            <div class="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent"></div>
-            <p class="mt-4 text-center text-lg font-medium">Generating image...</p>
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="loading-spinner">
+                <div class="loading-spinner-circle"></div>
+            </div>
+            <p class="text-lg font-medium text-gray-700">Generating image...</p>
         </div>
     </div>
 
@@ -257,6 +314,8 @@ if (isset($_GET['logout'])) {
             const file = e.target.files[0];
             if (file) {
                 handleFile(file, type);
+                // Reset the file input value so the same file can be selected again
+                e.target.value = '';
             }
         }
 
@@ -279,7 +338,7 @@ if (isset($_GET['logout'])) {
                     isPrimaryGenerated = false;
                     
                     // Only show secondary container if this is the first upload and no generations yet
-                    if (history.length === 1 && !secondaryImage) {
+                    if (history.length === 1) {
                         secondaryImageContainer.classList.remove('hidden');
                     }
                 } else {
@@ -306,11 +365,6 @@ if (isset($_GET['logout'])) {
                 return;
             }
 
-            if (!primaryImage) {
-                alert('Please upload at least one image');
-                return;
-            }
-
             document.getElementById('loadingOverlay').classList.remove('hidden');
 
             // If we have an active history item, trim history to that point before adding new content
@@ -324,8 +378,8 @@ if (isset($_GET['logout'])) {
                 parts: [{ text: prompt }]
             };
 
-            // Only add primary image if it's not from history (not generated)
-            if (!isPrimaryGenerated) {
+            // Only add primary image if it exists and is not from history (not generated)
+            if (primaryImage && !isPrimaryGenerated) {
                 currentPrompt.parts.push({
                     inlineData: {
                         mimeType: "image/jpeg",
