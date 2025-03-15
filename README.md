@@ -15,7 +15,7 @@ AutoShop is a web application that allows users to create and edit images using 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/autoshop.git
+git clone https://github.com/arimk/autoshop.git
 cd autoshop
 ```
 

@@ -8,7 +8,7 @@ define('GEMINI_API_KEY', 'your_api_key_here');
 define('GEMINI_API_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent');
 
 // Application settings
-define('MAX_UPLOAD_SIZE', 5 * 1024 * 1024); // 5MB
+define('MAX_UPLOAD_SIZE', 5 * 2024 * 2024);
 define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/gif']);
 define('UPLOAD_DIR', __DIR__ . '/uploads');
 

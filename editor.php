@@ -22,10 +22,64 @@ if (isset($_GET['logout'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AutoShop - Image Editor</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body, html {
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        #historyContainer {
+            overflow-y: auto;
+            max-height: calc(100% - 70px); /* Account for header height */
+        }
+        
+        #imageContainer {
+            overflow: hidden; /* Changed from auto to hidden */
+        }
+        
+        #dropZone {
+            width: 100%;
+            height: 100%;
+        }
+        
+        #previewImage {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* New styles for image containers */
+        .image-container {
+            height: 400px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* Ensure the flex layout properly handles tall content */
+        .flex-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .flex-grow-container {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
+<body class="bg-gray-100 h-screen flex flex-col">
     <!-- Header Bar -->
-    <div class="bg-white shadow-md w-full">
+    <div class="bg-white shadow-md w-full flex-shrink-0">
         <div class="container mx-auto px-4 py-4">
             <div class="flex justify-between items-center">
                 <h1 class="text-3xl font-bold text-gray-800">AutoShop Image Editor</h1>
@@ -35,45 +89,67 @@ if (isset($_GET['logout'])) {
     </div>
 
     <!-- Main Content -->
-    <div class="flex-1 flex min-h-0">
+    <div class="flex flex-1 min-h-0">
         <!-- Main Content Area (75%) -->
-        <div id="mainContent" class="w-3/4 p-8 overflow-hidden flex">
-            <div class="bg-white rounded-xl shadow-lg p-8 flex flex-col w-full max-w-[1400px] mx-auto">
-                <div class="mb-6">
-                    <textarea id="prompt" class="w-full h-32 p-4 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg" 
+        <div id="mainContent" class="w-3/4 p-6 flex flex-col">
+            <div class="bg-white rounded-xl shadow-lg p-6 flex flex-col h-full">
+                <div class="mb-4 flex-shrink-0">
+                    <textarea id="prompt" class="w-full h-28 p-4 border rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg" 
                         placeholder="Enter your prompt here..."></textarea>
                 </div>
                 
-                <div id="imageContainer" class="flex-1 mb-6 border-2 border-dashed border-gray-300 rounded-lg p-4 overflow-hidden relative" style="max-height: calc(100vh - 340px);">
-                    <div id="dropZone" class="h-full flex items-center justify-center relative">
-                        <div id="uploadPrompt" class="absolute inset-0 flex flex-col items-center justify-center">
-                            <p class="mb-4 text-gray-600 text-lg">Drag and drop an image here or</p>
-                            <button id="uploadBtn" class="bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition-colors text-lg">
-                                Choose File
-                            </button>
-                            <input type="file" id="fileInput" class="hidden" accept="image/*">
+                <div class="flex-grow-container mb-4 flex flex-wrap gap-4">
+                    <!-- Primary Image Container -->
+                    <div id="primaryImageContainer" class="flex-1 min-w-[45%] border-2 border-dashed border-gray-300 rounded-lg p-4 relative image-container">
+                        <div id="primaryDropZone" class="h-full flex items-center justify-center">
+                            <div id="primaryUploadPrompt" class="absolute inset-0 flex flex-col items-center justify-center">
+                                <p class="mb-4 text-gray-600 text-lg">Drag and drop primary image here or</p>
+                                <button id="primaryUploadBtn" class="bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition-colors text-lg">
+                                    Choose File
+                                </button>
+                                <input type="file" id="primaryFileInput" class="hidden" accept="image/*">
+                            </div>
+                            <img id="primaryPreviewImage" class="preview-image hidden" src="" alt="Primary Image">
                         </div>
-                        <img id="previewImage" class="max-w-full max-h-full object-contain hidden" src="" alt="Preview">
+                        <button id="primaryRemoveImageBtn" class="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full hidden hover:bg-red-600 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
                     </div>
-                    <button id="removeImageBtn" class="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full hidden hover:bg-red-600 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+                    
+                    <!-- Secondary Image Container (initially hidden) -->
+                    <div id="secondaryImageContainer" class="hidden flex-1 min-w-[45%] border-2 border-dashed border-gray-300 rounded-lg p-4 relative image-container">
+                        <div id="secondaryDropZone" class="h-full flex items-center justify-center">
+                            <div id="secondaryUploadPrompt" class="absolute inset-0 flex flex-col items-center justify-center">
+                                <p class="mb-4 text-gray-600 text-lg">Drag and drop secondary image here or</p>
+                                <button id="secondaryUploadBtn" class="bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition-colors text-lg">
+                                    Choose File
+                                </button>
+                                <input type="file" id="secondaryFileInput" class="hidden" accept="image/*">
+                            </div>
+                            <img id="secondaryPreviewImage" class="preview-image hidden" src="" alt="Secondary Image">
+                        </div>
+                        <button id="secondaryRemoveImageBtn" class="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full hidden hover:bg-red-600 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
-                <button id="generateBtn" class="w-full bg-green-500 text-white py-4 px-6 rounded-lg hover:bg-green-600 transition-colors text-lg font-semibold">
+                <button id="generateBtn" class="w-full bg-green-500 text-white py-4 px-6 rounded-lg hover:bg-green-600 transition-colors text-lg font-semibold flex-shrink-0">
                     Generate Image
                 </button>
             </div>
         </div>
 
         <!-- History Panel (25%) -->
-        <div id="historyPanel" class="w-1/4 bg-gray-50 p-8 border-l border-gray-200 overflow-hidden">
-            <div class="bg-white rounded-xl shadow-lg p-6 h-full flex flex-col">
-                <div class="flex justify-between items-center mb-4 pb-4 border-b">
+        <div id="historyPanel" class="w-1/4 bg-gray-50 p-6 border-l border-gray-200 flex flex-col">
+            <div class="bg-white rounded-xl shadow-lg p-4 flex flex-col h-full">
+                <div class="flex justify-between items-center mb-4 pb-2 border-b flex-shrink-0">
                     <h2 class="text-xl font-bold text-gray-800">History</h2>
-                    <button id="clearHistoryBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition-colors text-sm">
+                    <button id="clearHistoryBtn" class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition-colors text-sm">
                         Clear History
                     </button>
                 </div>
@@ -104,55 +180,73 @@ if (isset($_GET['logout'])) {
         // Initialize history with system prompt
         let history = [systemPrompt];
         let activeHistoryIndex = -1; // Track which history item is active
-        let currentImage = null;
+        let primaryImage = null;
+        let secondaryImage = null;
+        let isPrimaryGenerated = false; // Track if primary image is generated
 
-        // File Upload Handling
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const previewImage = document.getElementById('previewImage');
-        const uploadPrompt = document.getElementById('uploadPrompt');
-        const removeImageBtn = document.getElementById('removeImageBtn');
+        // Primary Image Elements
+        const primaryImageContainer = document.getElementById('primaryImageContainer');
+        const primaryDropZone = document.getElementById('primaryDropZone');
+        const primaryFileInput = document.getElementById('primaryFileInput');
+        const primaryUploadBtn = document.getElementById('primaryUploadBtn');
+        const primaryPreviewImage = document.getElementById('primaryPreviewImage');
+        const primaryUploadPrompt = document.getElementById('primaryUploadPrompt');
+        const primaryRemoveImageBtn = document.getElementById('primaryRemoveImageBtn');
 
-        uploadBtn.addEventListener('click', () => fileInput.click());
-        removeImageBtn.addEventListener('click', removeCurrentImage);
+        // Secondary Image Elements
+        const secondaryImageContainer = document.getElementById('secondaryImageContainer');
+        const secondaryDropZone = document.getElementById('secondaryDropZone');
+        const secondaryFileInput = document.getElementById('secondaryFileInput');
+        const secondaryUploadBtn = document.getElementById('secondaryUploadBtn');
+        const secondaryPreviewImage = document.getElementById('secondaryPreviewImage');
+        const secondaryUploadPrompt = document.getElementById('secondaryUploadPrompt');
+        const secondaryRemoveImageBtn = document.getElementById('secondaryRemoveImageBtn');
 
-        function removeCurrentImage() {
-            currentImage = null;
-            previewImage.src = '';
-            previewImage.classList.add('hidden');
-            uploadPrompt.classList.remove('hidden');
-            removeImageBtn.classList.add('hidden');
+        // Set up event listeners for primary image
+        primaryUploadBtn.addEventListener('click', () => primaryFileInput.click());
+        primaryRemoveImageBtn.addEventListener('click', removePrimaryImage);
+        primaryFileInput.addEventListener('change', (e) => handleFileSelect(e, 'primary'));
+        setupDragAndDrop(primaryImageContainer, 'primary');
+
+        // Set up event listeners for secondary image
+        secondaryUploadBtn.addEventListener('click', () => secondaryFileInput.click());
+        secondaryRemoveImageBtn.addEventListener('click', removeSecondaryImage);
+        secondaryFileInput.addEventListener('change', (e) => handleFileSelect(e, 'secondary'));
+        setupDragAndDrop(secondaryImageContainer, 'secondary');
+
+        function setupDragAndDrop(container, type) {
+            container.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                container.classList.add('border-blue-500');
+            });
+
+            container.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                container.classList.remove('border-blue-500');
+            });
+
+            container.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                container.classList.remove('border-blue-500');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0], type);
+                }
+            });
         }
 
-        fileInput.addEventListener('change', handleFileSelect);
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('border-blue-500');
-        });
-
-        dropZone.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('border-blue-500');
-        });
-
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('border-blue-500');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFile(files[0]);
-            }
-        });
-
-        function handleFileSelect(e) {
+        function handleFileSelect(e, type) {
             const file = e.target.files[0];
             if (file) {
-                handleFile(file);
+                handleFile(file, type);
             }
         }
 
-        function handleFile(file) {
+        function handleFile(file, type) {
             if (!file.type.startsWith('image/')) {
                 alert('Please upload an image file');
                 return;
@@ -160,16 +254,24 @@ if (isset($_GET['logout'])) {
 
             const reader = new FileReader();
             reader.onload = (e) => {
-                currentImage = e.target.result;
-                previewImage.src = currentImage;
-                previewImage.classList.remove('hidden');
-                uploadPrompt.classList.add('hidden');
-                removeImageBtn.classList.remove('hidden');
+                const imageData = e.target.result;
                 
-                // Ensure the image container adjusts to the image
-                const dropZone = document.getElementById('dropZone');
-                if (previewImage.naturalHeight > previewImage.naturalWidth) {
-                    dropZone.style.minHeight = '500px';
+                if (type === 'primary') {
+                    primaryImage = imageData;
+                    primaryPreviewImage.src = primaryImage;
+                    primaryPreviewImage.classList.remove('hidden');
+                    primaryUploadPrompt.classList.add('hidden');
+                    primaryRemoveImageBtn.classList.remove('hidden');
+                    isPrimaryGenerated = false;
+                    
+                    // Show secondary image container when primary image is added
+                    secondaryImageContainer.classList.remove('hidden');
+                } else {
+                    secondaryImage = imageData;
+                    secondaryPreviewImage.src = secondaryImage;
+                    secondaryPreviewImage.classList.remove('hidden');
+                    secondaryUploadPrompt.classList.add('hidden');
+                    secondaryRemoveImageBtn.classList.remove('hidden');
                 }
             };
             reader.readAsDataURL(file);
@@ -183,6 +285,11 @@ if (isset($_GET['logout'])) {
                 return;
             }
 
+            if (!primaryImage) {
+                alert('Please upload at least one image');
+                return;
+            }
+
             document.getElementById('loadingOverlay').classList.remove('hidden');
 
             // If we have an active history item, trim history to that point before adding new content
@@ -190,17 +297,28 @@ if (isset($_GET['logout'])) {
                 history = history.slice(0, activeHistoryIndex + 1);
             }
 
-            // Add the current prompt and image (if any) to the request
+            // Add the current prompt and image(s) to the request
             const currentPrompt = {
                 role: "user",
                 parts: [{ text: prompt }]
             };
 
-            if (currentImage) {
+            // Only add primary image if it's not from history (not generated)
+            if (!isPrimaryGenerated) {
                 currentPrompt.parts.push({
                     inlineData: {
                         mimeType: "image/jpeg",
-                        data: currentImage.split(',')[1]
+                        data: primaryImage.split(',')[1]
+                    }
+                });
+            }
+
+            // Add secondary image if it exists
+            if (secondaryImage) {
+                currentPrompt.parts.push({
+                    inlineData: {
+                        mimeType: "image/jpeg",
+                        data: secondaryImage.split(',')[1]
                     }
                 });
             }
@@ -235,11 +353,15 @@ if (isset($_GET['logout'])) {
                 const generatedImage = data.candidates[0].content.parts[0].inlineData.data;
                 
                 // Update the preview with the generated image
-                currentImage = `data:image/png;base64,${generatedImage}`;
-                previewImage.src = currentImage;
-                previewImage.classList.remove('hidden');
-                uploadPrompt.classList.add('hidden');
-                removeImageBtn.classList.remove('hidden');
+                primaryImage = `data:image/png;base64,${generatedImage}`;
+                primaryPreviewImage.src = primaryImage;
+                primaryPreviewImage.classList.remove('hidden');
+                primaryUploadPrompt.classList.add('hidden');
+                primaryRemoveImageBtn.classList.remove('hidden');
+                isPrimaryGenerated = true;
+                
+                // Clear secondary image after generation
+                removeSecondaryImage();
 
                 // Add the response to history
                 history.push({
@@ -283,12 +405,17 @@ if (isset($_GET['logout'])) {
                     // Add prompt text
                     const promptDiv = document.createElement('div');
                     promptDiv.className = 'text-sm text-gray-600 mb-2 line-clamp-2';
-                    promptDiv.textContent = history[i-1].parts[0].text;
+                    // Get the prompt text, handling both regular prompts and initial image uploads
+                    const promptText = history[i-1].parts[0].text;
+                    promptDiv.textContent = promptText;
                     historyItem.appendChild(promptDiv);
 
                     // Add image
                     const img = document.createElement('img');
-                    img.src = `data:image/png;base64,${history[i].parts[0].inlineData.data}`;
+                    // For model responses, the image is in parts[0]
+                    // For user uploads without generation, we need to get the image from parts[1]
+                    const imageData = history[i].parts[0].inlineData.data;
+                    img.src = `data:image/png;base64,${imageData}`;
                     img.className = 'w-full h-auto rounded-md';
                     historyItem.appendChild(img);
 
@@ -308,14 +435,57 @@ if (isset($_GET['logout'])) {
             
             // Update the current image preview
             const selectedImage = history[index].parts[0].inlineData.data;
-            currentImage = `data:image/png;base64,${selectedImage}`;
-            previewImage.src = currentImage;
-            previewImage.classList.remove('hidden');
-            uploadPrompt.classList.add('hidden');
-            removeImageBtn.classList.remove('hidden');
+            primaryImage = `data:image/png;base64,${selectedImage}`;
+            primaryPreviewImage.src = primaryImage;
+            primaryPreviewImage.classList.remove('hidden');
+            primaryUploadPrompt.classList.add('hidden');
+            primaryRemoveImageBtn.classList.remove('hidden');
+            isPrimaryGenerated = true;
+            
+            // Show secondary container but clear any secondary image
+            secondaryImageContainer.classList.remove('hidden');
+            removeSecondaryImage();
             
             // Update history display to highlight selected item
             updateHistoryDisplay();
+        }
+
+        function removePrimaryImage() {
+            // Only allow removal if it's not a generated image
+            if (isPrimaryGenerated) {
+                alert('Cannot remove a generated image. Please clear history to start over.');
+                return;
+            }
+
+            primaryImage = null;
+            primaryPreviewImage.src = '';
+            primaryPreviewImage.classList.add('hidden');
+            primaryUploadPrompt.classList.remove('hidden');
+            primaryRemoveImageBtn.classList.add('hidden');
+            isPrimaryGenerated = false;
+            
+            // If secondary image exists, make it the primary
+            if (secondaryImage) {
+                primaryImage = secondaryImage;
+                primaryPreviewImage.src = secondaryImage;
+                primaryPreviewImage.classList.remove('hidden');
+                primaryUploadPrompt.classList.add('hidden');
+                primaryRemoveImageBtn.classList.remove('hidden');
+                
+                // Clear secondary
+                removeSecondaryImage();
+            } else {
+                // Hide secondary container if no images
+                secondaryImageContainer.classList.add('hidden');
+            }
+        }
+
+        function removeSecondaryImage() {
+            secondaryImage = null;
+            secondaryPreviewImage.src = '';
+            secondaryPreviewImage.classList.add('hidden');
+            secondaryUploadPrompt.classList.remove('hidden');
+            secondaryRemoveImageBtn.classList.add('hidden');
         }
 
         function clearHistory() {
@@ -323,13 +493,22 @@ if (isset($_GET['logout'])) {
             container.innerHTML = '';
             history = [systemPrompt]; // Keep only the system prompt
             activeHistoryIndex = -1;
+            isPrimaryGenerated = false;
             
-            // Clear current image
-            currentImage = null;
-            previewImage.src = '';
-            previewImage.classList.add('hidden');
-            uploadPrompt.classList.remove('hidden');
-            removeImageBtn.classList.add('hidden');
+            // Clear primary image
+            primaryImage = null;
+            primaryPreviewImage.src = '';
+            primaryPreviewImage.classList.add('hidden');
+            primaryUploadPrompt.classList.remove('hidden');
+            primaryRemoveImageBtn.classList.add('hidden');
+            
+            // Clear and hide secondary image
+            secondaryImage = null;
+            secondaryPreviewImage.src = '';
+            secondaryPreviewImage.classList.add('hidden');
+            secondaryUploadPrompt.classList.remove('hidden');
+            secondaryRemoveImageBtn.classList.add('hidden');
+            secondaryImageContainer.classList.add('hidden');
         }
 
         // Initialize clear history button
