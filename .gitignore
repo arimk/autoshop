@@ -1,0 +1,15 @@
+# Configuration files
+config.php
+.env
+
+# IDE and system files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+uploads/*
+!uploads/.gitkeep 
