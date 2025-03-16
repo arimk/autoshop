@@ -26,7 +26,7 @@ cp config-sample.php config.php
 
 3. Edit `config.php` and set your credentials:
 - Set your desired username and password
-- Add your Gemini API key (obtain from Google AI Studio)
+- Add your Gemini API key (obtained from Google AI Studio)
 - Adjust other configuration settings if needed
 
 4. Set up a PHP server:
@@ -50,13 +50,12 @@ php -S localhost:8000
 3. Optionally upload an image to edit
 4. Click "Generate Image" to create or edit the image
 5. View the history of generated images in the right panel
+6. Click on an image in the history to come back to an older step and continue
 
 ## Security Notes
 
 - Never commit your `config.php` file
 - Keep your API key secure
-- Use HTTPS in production
-- Regularly update dependencies
 
 ## License
 
