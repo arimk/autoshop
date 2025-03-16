@@ -2,6 +2,8 @@
 
 AutoShop is an easy web application demo that allows users to create and edit images using Google's Gemini 2.0 Flash Exp API multimodal model. The application provides an intuitive interface for entering prompts and optionally uploading images for editing.
 
+AutoShop was vibe coded with Cursor IDE.
+
 ## Features
 
 - User authentication
