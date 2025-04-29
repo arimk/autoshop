@@ -482,78 +482,60 @@ if (isset($_GET['logout'])) {
             document.getElementById('loadingOverlay').classList.remove('hidden');
 
             let historyForAPI = [];
-            let currentContentToAppend = []; // Holds image(s) for the current request's user prompt
+            let isGeneratingFromInitial = false;
 
             // 1. Add system prompt
             historyForAPI.push(systemPrompt);
 
             // 2. Determine the base context (previous prompts/images) and image(s) for the *current* user prompt
-            if (activeHistoryIndex === 2) { // Generating from the initial uploaded state
+            if (activeHistoryIndex === 2) { // Explicitly generating from the initial uploaded state
                 // No prior history needed for API call
-                // Add initial primary image to current prompt
+                // Trim actual history if we branched (although index 2 is the base, nothing to trim yet)
+                history = history.slice(0, 3); // Keep system, initial user, initial model
+                isGeneratingFromInitial = true;
+            } else if (activeHistoryIndex > 2) { // Generating from a previous *generated* state
+                // Include history up to the selected point for the API call
+                // Slice from index 3 (skip initial state placeholders) up to and including the selected model response (activeHistoryIndex)
+                historyForAPI = historyForAPI.concat(history.slice(3, activeHistoryIndex + 1));
+
+                // Trim actual history if we branched from an older state
+                history = history.slice(0, activeHistoryIndex + 1);
+                isGeneratingFromInitial = false;
+            } else { // activeHistoryIndex is -1 (generating from the latest state)
+                // Include all generated history for the API call (skip initial placeholders)
+                if (history.length > 3) {
+                     historyForAPI = historyForAPI.concat(history.slice(3));
+                     isGeneratingFromInitial = false;
+                } else {
+                    // History length is 3, meaning only system + initial pair exists
+                    isGeneratingFromInitial = true;
+                }
+            }
+
+            // 3. Create the new user prompt part for the API call
+            const currentUserPrompt = {
+                role: "user",
+                parts: [{ text: prompt }]
+            };
+
+            // ONLY add image data to the user prompt if generating from the initial state
+            if (isGeneratingFromInitial) {
                 if (primaryImage) {
-                    currentContentToAppend.push({
+                    currentUserPrompt.parts.push({
                         inlineData: {
                             mimeType: getImageMimeType(primaryImage),
                             data: primaryImage.split(',')[1]
                         }
                     });
                 }
-                // Add initial secondary image to current prompt if it exists
-                 if (secondaryImage) {
-                    currentContentToAppend.push({
+                if (secondaryImage) {
+                    currentUserPrompt.parts.push({
                         inlineData: {
                             mimeType: getImageMimeType(secondaryImage),
                             data: secondaryImage.split(',')[1]
                         }
                     });
                 }
-                // Trim actual history if we branched (although index 2 is the base, nothing to trim yet)
-                history = history.slice(0, 3); // Keep system, initial user, initial model
-
-            } else if (activeHistoryIndex > 2) { // Generating from a previous *generated* state
-                // Include history up to the selected point for the API call
-                // Slice from index 3 (skip initial state placeholders) up to and including the selected model response (activeHistoryIndex)
-                historyForAPI = historyForAPI.concat(history.slice(3, activeHistoryIndex + 1));
-
-                // The image to edit is the one from the selected history item
-                 if (history[activeHistoryIndex]?.role === 'model' && history[activeHistoryIndex].parts[0]?.inlineData) {
-                     // Add the selected generated image's data to the current prompt
-                     currentContentToAppend.push(history[activeHistoryIndex].parts[0]);
-                 }
-                // Trim actual history if we branched from an older state
-                history = history.slice(0, activeHistoryIndex + 1);
-
-            } else { // activeHistoryIndex is -1 (generating from the latest state)
-                // Include all generated history for the API call (skip initial placeholders)
-                if (history.length > 3) {
-                     historyForAPI = historyForAPI.concat(history.slice(3));
-                }
-
-                // Determine image(s) to add to the current prompt based on the latest state
-                const latestModelIndex = history.length - 1;
-                if (history[latestModelIndex]?.role === 'model') { // Latest state is a model response
-                    if (latestModelIndex === 2) { // Latest state IS the initial upload
-                        if (primaryImage) {
-                            currentContentToAppend.push({ inlineData: { mimeType: getImageMimeType(primaryImage), data: primaryImage.split(',')[1] } });
-                        }
-                        if (secondaryImage) {
-                            currentContentToAppend.push({ inlineData: { mimeType: getImageMimeType(secondaryImage), data: secondaryImage.split(',')[1] } });
-                        }
-                    } else { // Latest state is a generated image
-                         if (history[latestModelIndex].parts[0]?.inlineData) {
-                             currentContentToAppend.push(history[latestModelIndex].parts[0]);
-                         }
-                    }
-                }
-                // No history trimming needed if generating from latest state
-            }
-
-            // 3. Create the new user prompt part for the API call
-            const currentUserPrompt = {
-                role: "user",
-                // Prompt text first, then the image(s) determined above
-                parts: [{ text: prompt }, ...currentContentToAppend]
             };
 
             // 4. Add the new user prompt to the API history
@@ -562,7 +544,6 @@ if (isset($_GET['logout'])) {
             // 5. Add the new user prompt to the actual history (for UI display)
             // We will add the corresponding model response later upon success
             history.push(currentUserPrompt);
-
 
             try {
                 const response = await fetch('./api/generate_image.php', {
@@ -613,7 +594,7 @@ if (isset($_GET['logout'])) {
                 primaryPreviewImage.src = primaryImage;
                 primaryPreviewImage.classList.remove('hidden');
                 primaryUploadPrompt.classList.add('hidden');
-                primaryRemoveImageBtn.classList.remove('hidden'); // Show remove button, but it will be disabled effectively by isPrimaryGenerated
+                primaryRemoveImageBtn.classList.add('hidden');    // Hide remove button after generation
                 isPrimaryGenerated = true; // Mark as generated
 
                 // Add the model response to the actual history
@@ -781,8 +762,7 @@ if (isset($_GET['logout'])) {
                     primaryPreviewImage.src = primaryImage;
                     primaryPreviewImage.classList.remove('hidden');
                     primaryUploadPrompt.classList.add('hidden');
-                    // Show remove button, but logic inside removePrimaryImage will prevent removal
-                    primaryRemoveImageBtn.classList.remove('hidden');
+                    primaryRemoveImageBtn.classList.add('hidden'); // Hide remove button for generated images
                 } else {
                      // Should not happen for generated images, but handle defensively
                      primaryUploadPrompt.classList.remove('hidden');
@@ -794,6 +774,16 @@ if (isset($_GET['logout'])) {
 
             // Update history display highlights
             updateHistoryDisplay();
+
+            // --- Update prompt textarea ---
+            const promptElement = document.getElementById('prompt');
+            const nextUserPromptIndex = index + 1;
+            if (nextUserPromptIndex < history.length && history[nextUserPromptIndex]?.role === 'user' && history[nextUserPromptIndex].parts[0]?.text) {
+                promptElement.value = history[nextUserPromptIndex].parts[0].text;
+            } else {
+                // If it's the last item, or next item isn't a valid prompt, clear the textarea.
+                promptElement.value = '';
+            }
         }
 
 
