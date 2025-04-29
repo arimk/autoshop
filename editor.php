@@ -240,10 +240,10 @@ if (isset($_GET['logout'])) {
 
         // Initialize history with system prompt
         let history = [systemPrompt];
-        let activeHistoryIndex = -1; // Track which history item is active
-        let primaryImage = null;
-        let secondaryImage = null;
-        let isPrimaryGenerated = false; // Track if primary image is generated
+        let activeHistoryIndex = -1; // Track which history item's MODEL response is active (e.g., index 2 for initial state)
+        let primaryImage = null; // Stores base64 data URL
+        let secondaryImage = null; // Stores base64 data URL
+        let isPrimaryGenerated = false; // Track if primary image is generated vs initial upload
 
         // Primary Image Elements
         const primaryImageContainer = document.getElementById('primaryImageContainer');
@@ -265,25 +265,53 @@ if (isset($_GET['logout'])) {
 
         // Set up event listeners for primary image
         primaryUploadBtn.addEventListener('click', () => primaryFileInput.click());
-        primaryRemoveImageBtn.addEventListener('click', removePrimaryImage);
         primaryFileInput.addEventListener('change', (e) => handleFileSelect(e, 'primary'));
         setupDragAndDrop(primaryImageContainer, 'primary');
 
         // Set up event listeners for secondary image
         secondaryUploadBtn.addEventListener('click', () => secondaryFileInput.click());
-        secondaryRemoveImageBtn.addEventListener('click', removeSecondaryImage);
         secondaryFileInput.addEventListener('change', (e) => handleFileSelect(e, 'secondary'));
         setupDragAndDrop(secondaryImageContainer, 'secondary');
+
+        // Event listener for primary remove button
+        primaryRemoveImageBtn.addEventListener('click', () => {
+            // Check if removal is allowed (based on current state)
+            if (!isPrimaryGenerated) {
+                removePrimaryImage(); // Clears global var and UI only
+                updateInitialHistoryEntry(); // NOW update history[2] based on new global state
+                updateHistoryDisplay(); // Refresh history panel
+            } else {
+                alert('Cannot remove a generated image. Clear history or select the "Initial Upload" item to modify.');
+            }
+        });
+
+        // Event listener for secondary remove button
+        secondaryRemoveImageBtn.addEventListener('click', () => {
+            // Check if removal is allowed (based on current state)
+            if (!isPrimaryGenerated) {
+                removeSecondaryImage(); // Clears global var and UI only
+                updateInitialHistoryEntry(); // NOW update history[2] based on new global state
+                updateHistoryDisplay(); // Refresh history panel
+            }
+            // No alert needed if generated, button should be hidden anyway.
+        });
+
+        // Helper to get mime type from data URL
+        function getImageMimeType(dataUrl) {
+            if (!dataUrl) return null;
+            const match = dataUrl.match(/^data:(image\/[a-z]+);base64,/);
+            return match ? match[1] : 'image/jpeg'; // Default fallback
+        }
 
         function setupDragAndDrop(container, type) {
             container.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                // Only allow drag if it's primary or if secondary and no history
-                if (type === 'secondary' && (isPrimaryGenerated || history.length > 1)) {
-                    return;
+                // Allow drag on primary always.
+                // Allow drag on secondary ONLY if we are in the initial state (!isPrimaryGenerated) and primary exists
+                if (type === 'primary' || (type === 'secondary' && !isPrimaryGenerated && primaryImage && history.length >= 3)) {
+                     container.classList.add('border-blue-500');
                 }
-                container.classList.add('border-blue-500');
             });
 
             container.addEventListener('dragleave', (e) => {
@@ -296,13 +324,13 @@ if (isset($_GET['logout'])) {
                 e.preventDefault();
                 e.stopPropagation();
                 container.classList.remove('border-blue-500');
-                
-                // Prevent drop on secondary if there's any history
-                if (type === 'secondary' && (isPrimaryGenerated || history.length > 1)) {
-                    alert('Cannot add secondary image after generation. Please clear history to start over.');
+
+                // Prevent drop on secondary if not in the initial state or primary doesn't exist yet
+                 if (type === 'secondary' && (isPrimaryGenerated || !primaryImage || history.length < 3)) {
+                    alert('Secondary image can only be added or changed in the initial upload state, after a primary image is present.');
                     return;
                 }
-                
+
                 const files = e.dataTransfer.files;
                 if (files.length > 0) {
                     handleFile(files[0], type);
@@ -327,24 +355,50 @@ if (isset($_GET['logout'])) {
 
             const reader = new FileReader();
             reader.onload = (e) => {
-                const imageData = e.target.result;
-                
+                const imageData = e.target.result; // Base64 data URL
+
                 if (type === 'primary') {
+                    const wasFirstUpload = history.length === 1; // Check BEFORE potentially modifying history
                     primaryImage = imageData;
                     primaryPreviewImage.src = primaryImage;
                     primaryPreviewImage.classList.remove('hidden');
                     primaryUploadPrompt.classList.add('hidden');
                     primaryRemoveImageBtn.classList.remove('hidden');
-                    isPrimaryGenerated = false;
-                    
-                    // Only show secondary container if this is the first upload and no generations yet
-                    if (history.length === 1) {
-                        secondaryImageContainer.classList.remove('hidden');
+                    isPrimaryGenerated = false; // Reset flag on new primary upload
+
+                    if (wasFirstUpload) {
+                        // Create initial history entry
+                        createInitialHistoryEntry();
+                        secondaryImageContainer.classList.remove('hidden'); // Show secondary on first primary upload
+                        updateHistoryDisplay(); // Update display immediately
+                    } else {
+                         // If we re-upload primary while viewing initial state, update it
+                         if (activeHistoryIndex === 2 || activeHistoryIndex === -1) {
+                            updateInitialHistoryEntry();
+                            // If secondary existed, it's now orphaned, clear it
+                            if (secondaryImage) {
+                                removeSecondaryImage();
+                            }
+                            secondaryImageContainer.classList.remove('hidden'); // Ensure secondary is visible
+                            updateHistoryDisplay();
+                         } else {
+                             // Uploading primary while viewing a *generated* image implies starting over
+                             // Clear history and treat as first upload
+                             clearHistory();
+                             primaryImage = imageData; // Re-assign after clear
+                             primaryPreviewImage.src = primaryImage;
+                             primaryPreviewImage.classList.remove('hidden');
+                             primaryUploadPrompt.classList.add('hidden');
+                             primaryRemoveImageBtn.classList.remove('hidden');
+                             createInitialHistoryEntry();
+                             secondaryImageContainer.classList.remove('hidden');
+                             updateHistoryDisplay();
+                         }
                     }
-                } else {
-                    // Only allow secondary image if primary is not generated and no history
-                    if (isPrimaryGenerated || history.length > 1) {
-                        alert('Cannot add secondary image after generation. Please clear history to start over.');
+                } else { // type === 'secondary'
+                    // Allow only if primary exists and we're in initial state
+                    if (isPrimaryGenerated || !primaryImage || history.length < 3) {
+                        alert('Secondary image can only be added or changed in the initial upload state, after a primary image is present.');
                         return;
                     }
                     secondaryImage = imageData;
@@ -352,9 +406,64 @@ if (isset($_GET['logout'])) {
                     secondaryPreviewImage.classList.remove('hidden');
                     secondaryUploadPrompt.classList.add('hidden');
                     secondaryRemoveImageBtn.classList.remove('hidden');
+
+                    // Update the initial history entry to include the secondary image
+                    updateInitialHistoryEntry();
+                    updateHistoryDisplay(); // Update display immediately
                 }
             };
             reader.readAsDataURL(file);
+        }
+
+        function createInitialHistoryEntry() {
+            if (history.length !== 1 || !primaryImage) return; // Should only happen once with a primary image
+
+            const initialUserPrompt = { role: "user", parts: [{ text: "Initial Upload" }] };
+            const initialModelResponse = {
+                role: "model",
+                parts: [{
+                    inlineData: {
+                        mimeType: getImageMimeType(primaryImage),
+                        data: primaryImage.split(',')[1]
+                    }
+                }]
+                // Secondary image will be added by updateInitialHistoryEntry if needed
+            };
+            history.push(initialUserPrompt, initialModelResponse);
+            activeHistoryIndex = 2; // Point to the initial model state
+        }
+
+        function updateInitialHistoryEntry() {
+            // Ensure initial state exists and we have at least a primary image
+            if (history.length < 3 || history[1].parts[0].text !== "Initial Upload") return;
+
+            const parts = [];
+            if (primaryImage) {
+                parts.push({
+                    inlineData: {
+                        mimeType: getImageMimeType(primaryImage),
+                        data: primaryImage.split(',')[1]
+                    }
+                });
+            }
+            if (secondaryImage) {
+                 parts.push({
+                    inlineData: {
+                        mimeType: getImageMimeType(secondaryImage),
+                        data: secondaryImage.split(',')[1]
+                    }
+                });
+            }
+
+            // Only update if parts are not empty (avoid creating empty initial state)
+            if (parts.length > 0) {
+                history[2].parts = parts;
+            } else {
+                 // If both images are removed, reset history? Or just leave empty parts?
+                 // Let's reset - user should use clear history if they want to start over completely.
+                 // For now, just update parts to empty, remove buttons handle UI.
+                 history[2].parts = [];
+            }
         }
 
         // Generate Image
@@ -364,41 +473,96 @@ if (isset($_GET['logout'])) {
                 alert('Please enter a prompt');
                 return;
             }
+            // Require at least a primary image (either uploaded or generated)
+            if (!primaryImage) {
+                alert('Please upload or generate a primary image first.');
+                return;
+            }
 
             document.getElementById('loadingOverlay').classList.remove('hidden');
 
-            // If we have an active history item, trim history to that point before adding new content
-            if (activeHistoryIndex !== -1) {
+            let historyForAPI = [];
+            let currentContentToAppend = []; // Holds image(s) for the current request's user prompt
+
+            // 1. Add system prompt
+            historyForAPI.push(systemPrompt);
+
+            // 2. Determine the base context (previous prompts/images) and image(s) for the *current* user prompt
+            if (activeHistoryIndex === 2) { // Generating from the initial uploaded state
+                // No prior history needed for API call
+                // Add initial primary image to current prompt
+                if (primaryImage) {
+                    currentContentToAppend.push({
+                        inlineData: {
+                            mimeType: getImageMimeType(primaryImage),
+                            data: primaryImage.split(',')[1]
+                        }
+                    });
+                }
+                // Add initial secondary image to current prompt if it exists
+                 if (secondaryImage) {
+                    currentContentToAppend.push({
+                        inlineData: {
+                            mimeType: getImageMimeType(secondaryImage),
+                            data: secondaryImage.split(',')[1]
+                        }
+                    });
+                }
+                // Trim actual history if we branched (although index 2 is the base, nothing to trim yet)
+                history = history.slice(0, 3); // Keep system, initial user, initial model
+
+            } else if (activeHistoryIndex > 2) { // Generating from a previous *generated* state
+                // Include history up to the selected point for the API call
+                // Slice from index 3 (skip initial state placeholders) up to and including the selected model response (activeHistoryIndex)
+                historyForAPI = historyForAPI.concat(history.slice(3, activeHistoryIndex + 1));
+
+                // The image to edit is the one from the selected history item
+                 if (history[activeHistoryIndex]?.role === 'model' && history[activeHistoryIndex].parts[0]?.inlineData) {
+                     // Add the selected generated image's data to the current prompt
+                     currentContentToAppend.push(history[activeHistoryIndex].parts[0]);
+                 }
+                // Trim actual history if we branched from an older state
                 history = history.slice(0, activeHistoryIndex + 1);
+
+            } else { // activeHistoryIndex is -1 (generating from the latest state)
+                // Include all generated history for the API call (skip initial placeholders)
+                if (history.length > 3) {
+                     historyForAPI = historyForAPI.concat(history.slice(3));
+                }
+
+                // Determine image(s) to add to the current prompt based on the latest state
+                const latestModelIndex = history.length - 1;
+                if (history[latestModelIndex]?.role === 'model') { // Latest state is a model response
+                    if (latestModelIndex === 2) { // Latest state IS the initial upload
+                        if (primaryImage) {
+                            currentContentToAppend.push({ inlineData: { mimeType: getImageMimeType(primaryImage), data: primaryImage.split(',')[1] } });
+                        }
+                        if (secondaryImage) {
+                            currentContentToAppend.push({ inlineData: { mimeType: getImageMimeType(secondaryImage), data: secondaryImage.split(',')[1] } });
+                        }
+                    } else { // Latest state is a generated image
+                         if (history[latestModelIndex].parts[0]?.inlineData) {
+                             currentContentToAppend.push(history[latestModelIndex].parts[0]);
+                         }
+                    }
+                }
+                // No history trimming needed if generating from latest state
             }
 
-            // Add the current prompt and image(s) to the request
-            const currentPrompt = {
+            // 3. Create the new user prompt part for the API call
+            const currentUserPrompt = {
                 role: "user",
-                parts: [{ text: prompt }]
+                // Prompt text first, then the image(s) determined above
+                parts: [{ text: prompt }, ...currentContentToAppend]
             };
 
-            // Only add primary image if it exists and is not from history (not generated)
-            if (primaryImage && !isPrimaryGenerated) {
-                currentPrompt.parts.push({
-                    inlineData: {
-                        mimeType: "image/jpeg",
-                        data: primaryImage.split(',')[1]
-                    }
-                });
-            }
+            // 4. Add the new user prompt to the API history
+            historyForAPI.push(currentUserPrompt);
 
-            // Add secondary image if it exists
-            if (secondaryImage) {
-                currentPrompt.parts.push({
-                    inlineData: {
-                        mimeType: "image/jpeg",
-                        data: secondaryImage.split(',')[1]
-                    }
-                });
-            }
+            // 5. Add the new user prompt to the actual history (for UI display)
+            // We will add the corresponding model response later upon success
+            history.push(currentUserPrompt);
 
-            history.push(currentPrompt);
 
             try {
                 const response = await fetch('./api/generate_image.php', {
@@ -407,57 +571,84 @@ if (isset($_GET['logout'])) {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        contents: history
+                        contents: historyForAPI // Send the carefully constructed history
                     })
                 });
 
+                // Check for non-2xx status codes first
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    let errorData;
+                    try {
+                        errorData = await response.json();
+                    } catch (e) {
+                        errorData = { error: 'Failed to parse error response', details: await response.text() };
+                    }
+
+                    // Handle specific error codes if needed (like 422 for safety)
+                    if (response.status === 422 && errorData.details) {
+                         throw new Error(`Image generation failed: ${errorData.details}`);
+                    } else {
+                        throw new Error(`HTTP error ${response.status}: ${errorData.error || 'Unknown API error'}`);
+                    }
                 }
 
-                const data = await response.json();
-                
-                if (data.candidates && data.candidates[0].finishReason === 'IMAGE_SAFETY') {
+                const data = await response.json(); // Assuming 2xx means valid JSON response structure
+
+                // It's still good practice to check the structure even after response.ok
+                if (data.candidates && data.candidates[0]?.finishReason === 'IMAGE_SAFETY') {
                     throw new Error('The image could not be generated due to safety concerns. Please try a different prompt or image.');
                 }
-                
-                if (!data.candidates || !data.candidates[0].content || !data.candidates[0].content.parts) {
-                    throw new Error('Unexpected API response format. Please try again.');
+                if (!data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+                     console.error("Unexpected API response format:", data);
+                    throw new Error('Unexpected API response format after successful generation. Please check console.');
                 }
 
-                const generatedImage = data.candidates[0].content.parts[0].inlineData.data;
-                
-                // Update the preview with the generated image
-                primaryImage = `data:image/png;base64,${generatedImage}`;
+
+                const generatedImagePart = data.candidates[0].content.parts[0].inlineData; // Contains mimeType and data
+                const generatedImageBase64 = generatedImagePart.data;
+                const generatedMimeType = generatedImagePart.mimeType;
+
+                // Update primary image display
+                primaryImage = `data:${generatedMimeType};base64,${generatedImageBase64}`;
                 primaryPreviewImage.src = primaryImage;
                 primaryPreviewImage.classList.remove('hidden');
                 primaryUploadPrompt.classList.add('hidden');
-                primaryRemoveImageBtn.classList.remove('hidden');
-                isPrimaryGenerated = true;
+                primaryRemoveImageBtn.classList.remove('hidden'); // Show remove button, but it will be disabled effectively by isPrimaryGenerated
+                isPrimaryGenerated = true; // Mark as generated
 
-                // Add the response to history
-                history.push({
+                // Add the model response to the actual history
+                const modelResponse = {
                     role: "model",
                     parts: [{
                         inlineData: {
-                            mimeType: "image/png",
-                            data: generatedImage
+                            mimeType: generatedMimeType,
+                            data: generatedImageBase64
                         }
                     }]
-                });
+                };
+                history.push(modelResponse);
 
-                activeHistoryIndex = -1; // Reset active index for new generation
+                activeHistoryIndex = -1; // Reset active index after new generation completes
                 updateHistoryDisplay();
 
-                // Now that generation is successful, hide secondary container and clear secondary image
+                // Hide secondary container, clear secondary image variable and UI
                 secondaryImageContainer.classList.add('hidden');
-                removeSecondaryImage();
+                removeSecondaryImage(); // Clear the variable and UI (safe even if already cleared)
 
                 // Clear the prompt
                 document.getElementById('prompt').value = '';
+
             } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while generating the image');
+                console.error('Error during generation:', error);
+                alert(`An error occurred: ${error.message}`);
+                // Remove the user prompt we optimistically added if API call failed
+                 if (history[history.length - 1]?.role === 'user') {
+                     history.pop();
+                 }
+                 // Reset active index and update display to reflect failed state
+                 activeHistoryIndex = history.length > 1 ? history.length - 1 : -1;
+                 updateHistoryDisplay();
+
             } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
             }
@@ -467,95 +658,173 @@ if (isset($_GET['logout'])) {
             const container = document.getElementById('historyContainer');
             container.innerHTML = ''; // Clear and rebuild entire history
 
-            // Create history items in reverse order (newest first)
-            for (let i = history.length - 1; i > 0; i -= 2) { // Start from last item, skip system prompt
-                if (history[i].role === 'model' && history[i-1].role === 'user') {
+            // Iterate backwards by pairs, skipping system prompt (index 0)
+            // Start from the index of the last potential model item
+            for (let i = history.length - 1; i >= 2; i -= 1) {
+                const currentItem = history[i];
+                const previousItem = history[i-1]; // User prompt or system prompt
+
+                // We are looking for model items preceded by user items
+                if (currentItem.role === 'model' && previousItem?.role === 'user') {
+                    const modelIndex = i; // Index of the model item
+                    const userIndex = i - 1; // Index of the user item
+
                     const historyItem = document.createElement('div');
-                    const isActive = i === activeHistoryIndex || (activeHistoryIndex === -1 && i === history.length - 1);
-                    
+                    // Check if this MODEL item is the active one OR (no item is active AND this is the latest MODEL item)
+                    const isActive = modelIndex === activeHistoryIndex || (activeHistoryIndex === -1 && modelIndex === history.length - 1);
+
                     historyItem.className = `border rounded-lg p-4 mb-4 cursor-pointer transition-all ${
                         isActive ? 'bg-white shadow-md ring-2 ring-blue-500' : 'bg-white shadow-sm hover:shadow-md'
                     }`;
-                    historyItem.dataset.index = i;
+                    historyItem.dataset.index = modelIndex; // Store the index of the MODEL item
 
-                    // Add prompt text
+                    // Add prompt text (always the first part of the user message)
                     const promptDiv = document.createElement('div');
                     promptDiv.className = 'text-sm text-gray-600 mb-2 line-clamp-2';
-                    // Get the prompt text, handling both regular prompts and initial image uploads
-                    const promptText = history[i-1].parts[0].text;
+                    // Get text from userItem (index i-1)
+                    const promptText = previousItem.parts[0]?.text || 'Prompt unavailable';
                     promptDiv.textContent = promptText;
                     historyItem.appendChild(promptDiv);
 
-                    // Add image
-                    const img = document.createElement('img');
-                    // For model responses, the image is in parts[0]
-                    // For user uploads without generation, we need to get the image from parts[1]
-                    const imageData = history[i].parts[0].inlineData.data;
-                    img.src = `data:image/png;base64,${imageData}`;
-                    img.className = 'w-full h-auto rounded-md';
-                    historyItem.appendChild(img);
+                    // Add image (use the first image part of the model message for thumbnail)
+                    if (currentItem.parts && currentItem.parts[0]?.inlineData) {
+                        const img = document.createElement('img');
+                        const imageData = currentItem.parts[0].inlineData.data;
+                        const mimeType = currentItem.parts[0].inlineData.mimeType;
+                        img.src = `data:${mimeType};base64,${imageData}`;
+                        img.className = 'w-full h-auto rounded-md';
+                        historyItem.appendChild(img);
+                    } else if (modelIndex === 2) { // Specifically for the initial upload item
+                         // If history[2] itself has no image data, show placeholder
+                         const placeholder = document.createElement('div');
+                         placeholder.className = 'text-sm text-gray-400 italic text-center py-4';
+                         placeholder.textContent = 'Initial image(s) removed';
+                         historyItem.appendChild(placeholder);
+                    }
 
-                    // Add click handler
-                    historyItem.addEventListener('click', () => selectHistoryItem(i));
+
+                    // Add click handler to select the MODEL item
+                    historyItem.addEventListener('click', () => selectHistoryItem(modelIndex));
 
                     container.appendChild(historyItem);
+
+                    // Decrement again since we processed a pair (model and user)
+                    i--;
                 }
             }
 
-            // Scroll to top after adding new item
+            // Scroll to top after updating
             container.scrollTop = 0;
         }
 
-        function selectHistoryItem(index) {
-            activeHistoryIndex = index;
-            
-            // Update the current image preview
-            const selectedImage = history[index].parts[0].inlineData.data;
-            primaryImage = `data:image/png;base64,${selectedImage}`;
-            primaryPreviewImage.src = primaryImage;
-            primaryPreviewImage.classList.remove('hidden');
-            primaryUploadPrompt.classList.add('hidden');
-            primaryRemoveImageBtn.classList.remove('hidden');
-            isPrimaryGenerated = true;
-            
-            // Hide secondary container and clear any secondary image for generated images
-            secondaryImageContainer.classList.add('hidden');
-            removeSecondaryImage();
-            
-            // Update history display to highlight selected item
-            updateHistoryDisplay();
-        }
 
-        function removePrimaryImage() {
-            // Only allow removal if it's not a generated image
-            if (isPrimaryGenerated) {
-                alert('Cannot remove a generated image. Please clear history to start over.');
+        function selectHistoryItem(index) {
+            // index points to the 'model' part of the pair in the history array
+            if (index < 2 || index >= history.length || history[index].role !== 'model') {
+                console.warn("Invalid index passed to selectHistoryItem:", index);
                 return;
             }
+            activeHistoryIndex = index;
 
+            const selectedModelItem = history[index];
+            // Determine if the target state is a generated one *before* resetting UI
+            const targetIsGenerated = index > 2;
+
+            const primaryImageDataPart = selectedModelItem.parts[0]?.inlineData;
+            // Secondary image only exists in the initial state (index 2)
+            const secondaryImageDataPart = (index === 2) ? selectedModelItem.parts[1]?.inlineData : null;
+
+            // --- Reset UI state first ---
+            // Set the generation flag based on the *target* state *before* calling reset helpers
+            isPrimaryGenerated = targetIsGenerated;
+
+            // Clear primary
             primaryImage = null;
             primaryPreviewImage.src = '';
             primaryPreviewImage.classList.add('hidden');
             primaryUploadPrompt.classList.remove('hidden');
             primaryRemoveImageBtn.classList.add('hidden');
-            isPrimaryGenerated = false;
-            
-            // If secondary image exists and no history, make it the primary
-            if (secondaryImage && history.length === 1) {
-                primaryImage = secondaryImage;
-                primaryPreviewImage.src = secondaryImage;
-                primaryPreviewImage.classList.remove('hidden');
-                primaryUploadPrompt.classList.add('hidden');
-                primaryRemoveImageBtn.classList.remove('hidden');
-                
-                // Clear secondary
-                removeSecondaryImage();
+            // Clear secondary
+            removeSecondaryImage(); // Now respects the isPrimaryGenerated flag set above
+            secondaryImageContainer.classList.add('hidden'); // Default to hidden
+
+            // --- Apply selected state ---
+            if (!targetIsGenerated) { // Selecting the initial uploaded state (index === 2)
+                // Restore primary image if it exists in history[2]
+                if (primaryImageDataPart) {
+                    primaryImage = `data:${primaryImageDataPart.mimeType};base64,${primaryImageDataPart.data}`;
+                    primaryPreviewImage.src = primaryImage;
+                    primaryPreviewImage.classList.remove('hidden');
+                    primaryUploadPrompt.classList.add('hidden');
+                    primaryRemoveImageBtn.classList.remove('hidden'); // Show remove button for initial upload
+                } else {
+                    primaryUploadPrompt.classList.remove('hidden'); // Ensure upload prompt shows if no primary image
+                }
+
+                // Restore secondary image if it existed in the initial state history item
+                if (secondaryImageDataPart) {
+                    secondaryImage = `data:${secondaryImageDataPart.mimeType};base64,${secondaryImageDataPart.data}`;
+                    secondaryPreviewImage.src = secondaryImage;
+                    secondaryPreviewImage.classList.remove('hidden');
+                    secondaryUploadPrompt.classList.add('hidden');
+                    secondaryRemoveImageBtn.classList.remove('hidden');
+                } else {
+                     secondaryUploadPrompt.classList.remove('hidden'); // Ensure upload prompt shows if no secondary image
+                }
+                // Show secondary container when viewing initial state (even if empty)
+                secondaryImageContainer.classList.remove('hidden');
+
+            } else { // Selecting a generated state (targetIsGenerated is true)
+                 // Update the primary image preview with the generated image
+                if (primaryImageDataPart) {
+                    primaryImage = `data:${primaryImageDataPart.mimeType};base64,${primaryImageDataPart.data}`;
+                    primaryPreviewImage.src = primaryImage;
+                    primaryPreviewImage.classList.remove('hidden');
+                    primaryUploadPrompt.classList.add('hidden');
+                    // Show remove button, but logic inside removePrimaryImage will prevent removal
+                    primaryRemoveImageBtn.classList.remove('hidden');
+                } else {
+                     // Should not happen for generated images, but handle defensively
+                     primaryUploadPrompt.classList.remove('hidden');
+                }
+                // Hide secondary container for generated images
+                secondaryImageContainer.classList.add('hidden');
+                // Secondary image variable is already cleared above
             }
-            // Never show secondary container if there has been any generation
-            secondaryImageContainer.classList.add('hidden');
+
+            // Update history display highlights
+            updateHistoryDisplay();
+        }
+
+
+        function removePrimaryImage() {
+            // Only allow removal if viewing the initial upload state
+            if (isPrimaryGenerated) {
+                return; // Prevent state change if generated
+            }
+
+            // If we are in the initial upload state (!isPrimaryGenerated)
+            primaryImage = null;
+            primaryPreviewImage.src = '';
+            primaryPreviewImage.classList.add('hidden');
+            primaryUploadPrompt.classList.remove('hidden');
+            primaryRemoveImageBtn.classList.add('hidden');
+
+            // Update the initial history state (index 2) to reflect removal
+            updateInitialHistoryEntry();
+            updateHistoryDisplay(); // Reflect the change in history panel
+
+            // If secondary image exists, it remains. Secondary container stays visible
+            // as we are still conceptually in the 'initial state'.
+            if (!isPrimaryGenerated && history.length >= 3) { // Ensure we are conceptually in initial state
+                secondaryImageContainer.classList.remove('hidden');
+            }
         }
 
         function removeSecondaryImage() {
+            // Only allow removal if viewing the initial upload state
+            if (isPrimaryGenerated) return;
+
             secondaryImage = null;
             secondaryPreviewImage.src = '';
             secondaryPreviewImage.classList.add('hidden');
@@ -566,24 +835,29 @@ if (isset($_GET['logout'])) {
         function clearHistory() {
             const container = document.getElementById('historyContainer');
             container.innerHTML = '';
-            history = [systemPrompt]; // Keep only the system prompt
+            history = [systemPrompt]; // Reset to only the system prompt
             activeHistoryIndex = -1;
             isPrimaryGenerated = false;
-            
-            // Clear primary image
+
+            // Clear primary image state and UI
             primaryImage = null;
             primaryPreviewImage.src = '';
             primaryPreviewImage.classList.add('hidden');
             primaryUploadPrompt.classList.remove('hidden');
             primaryRemoveImageBtn.classList.add('hidden');
-            
-            // Clear and hide secondary image
+
+            // Clear secondary image state and UI
             secondaryImage = null;
             secondaryPreviewImage.src = '';
             secondaryPreviewImage.classList.add('hidden');
             secondaryUploadPrompt.classList.remove('hidden');
             secondaryRemoveImageBtn.classList.add('hidden');
+
+            // Hide secondary container
             secondaryImageContainer.classList.add('hidden');
+
+            // Clear the prompt textarea
+            document.getElementById('prompt').value = '';
         }
 
         // Initialize clear history button
