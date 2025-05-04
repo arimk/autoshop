@@ -234,7 +234,7 @@ if (isset($_GET['logout'])) {
         const systemPrompt = {
             role: "user",
             parts: [{
-                text: "You are helping a user to create or edit an image. You will receive each time instruction for your next step to edit or create. Only answer with an image. Try to be the closest to the user needs. If editing an image, try to keep the style of the image as close as possible"
+                text: "You are helping a user to create or edit an image. You will receive each time instruction for your next step to edit or create. Only answer with an image. Try to be the closest to the user needs. If editing an image, try to keep the style of the image as close as possible. DO NOT ANY TEXT, JUST THE IMAGE."
             }]
         };
 
