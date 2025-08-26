@@ -579,13 +579,26 @@ if (isset($_GET['logout'])) {
                 if (data.candidates && data.candidates[0]?.finishReason === 'IMAGE_SAFETY') {
                     throw new Error('The image could not be generated due to safety concerns. Please try a different prompt or image.');
                 }
-                if (!data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
-                     console.error("Unexpected API response format:", data);
-                    throw new Error('Unexpected API response format after successful generation. Please check console.');
+                
+                // Find the first image part in the response
+                let generatedImagePart = null;
+                if (data.candidates?.[0]?.content?.parts && Array.isArray(data.candidates[0].content.parts)) {
+                    console.log('Searching through', data.candidates[0].content.parts.length, 'parts for image data');
+                    for (let i = 0; i < data.candidates[0].content.parts.length; i++) {
+                        const part = data.candidates[0].content.parts[i];
+                        console.log(`Part ${i}:`, part);
+                        if (part.inlineData && part.inlineData.mimeType && part.inlineData.mimeType.startsWith('image/')) {
+                            console.log(`Found image at part ${i}:`, part.inlineData.mimeType);
+                            generatedImagePart = part.inlineData;
+                            break;
+                        }
+                    }
                 }
-
-
-                const generatedImagePart = data.candidates[0].content.parts[0].inlineData; // Contains mimeType and data
+                
+                if (!generatedImagePart) {
+                    console.error("No image found in API response:", data);
+                    throw new Error('No image was generated. Please try a different prompt.');
+                }
                 const generatedImageBase64 = generatedImagePart.data;
                 const generatedMimeType = generatedImagePart.mimeType;
 
