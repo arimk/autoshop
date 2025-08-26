@@ -59,7 +59,7 @@ $geminiRequest = [
 ];
 
 // Initialize cURL session
-$ch = curl_init(GEMINI_API_ENDPOINT . '?key=' . GEMINI_API_KEY);
+$ch = curl_init(GEMINI_API_ENDPOINT . GEMINI_MODEL . ':generateContent?key=' . GEMINI_API_KEY);
 
 // Set cURL options
 curl_setopt_array($ch, [
