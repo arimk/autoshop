@@ -1,6 +1,7 @@
 # AutoShop
 
-AutoShop is an easy web application demo that allows users to create and edit images using Google's Gemini 2.0 Flash Exp API multimodal model. The application provides an intuitive interface for entering prompts and optionally uploading images for editing.
+AutoShop is an easy web application demo that allows users to create and edit images using Google's Gemini API multimodal edit image model. The application provides an intuitive interface for entering prompts and optionally uploading images for editing.
+It is supporting both gemini gemini-2.5-flash-image-preview AKA nano banano and older gemini-2.0-flash-exp-image-generation
 
 AutoShop was vibe coded with Cursor IDE.
 
@@ -25,6 +26,7 @@ cd autoshop
 ```bash
 cp config-sample.php config.php
 ```
+Or copy `config-sample.php` to a `config.php` page
 
 3. Edit `config.php` and set your credentials:
 - Set your desired username and password
